@@ -1,28 +1,35 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 const App = () => {
+    // Core State
     const [items, setItems] = useState([]);
     const [selectedCategory, setSelectedCategory] = useState(0);
+    const [loading, setLoading] = useState(true);
+    const [successMessage, setSuccessMessage] = useState("");
+
+    // Modal Control
     const [showModal, setShowModal] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [idToDelete, setIdToDelete] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [successMessage, setSuccessMessage] = useState("");
-    
+
+    // Form / Edit State
     const [isEditing, setIsEditing] = useState(false);
     const [currentId, setCurrentId] = useState(null);
     const [activeTab, setActiveTab] = useState("basic");
+    const [selectedFile, setSelectedFile] = useState(null);
+    const fileInputRef = useRef(null);
 
-    const [formData, setFormData] = useState({ 
-        name: "", 
+    const [formData, setFormData] = useState({
+        name: "",
         description: "",
         codeSnippet: "",
         videoUrl: "",
-        tags: "" 
+        tags: ""
     });
 
     const API_BASE = "http://localhost:9090/api/v1/category";
 
+    // Fetch Initial Data
     useEffect(() => {
         fetch(`${API_BASE}`)
             .then(res => res.json())
@@ -30,7 +37,10 @@ const App = () => {
                 setItems(json.data || []);
                 setLoading(false);
             })
-            .catch(() => setLoading(false));
+            .catch((err) => {
+                console.error("Fetch Error:", err);
+                setLoading(false);
+            });
     }, []);
 
     const triggerSuccess = (msg) => {
@@ -38,40 +48,12 @@ const App = () => {
         setTimeout(() => setSuccessMessage(""), 3000);
     };
 
-    // --- FIXED: executeDelete moved out of handleSave to component scope ---
-    const executeDelete = () => {
-        if (!idToDelete || !items[selectedCategory]) return;
-        
-        const categoryId = items[selectedCategory]._id;
-
-        fetch(`${API_BASE}/${categoryId}/component/${idToDelete}`, {
-            method: 'DELETE'
-        })
-        .then(res => res.json())
-        .then(response => {
-            if (response.status) {
-                const updatedItems = items.map((item, index) => {
-                    if (index === selectedCategory) {
-                        return {
-                            ...item,
-                            component: item.component.filter(c => (c._id !== idToDelete && c.id !== idToDelete))
-                        };
-                    }
-                    return item;
-                });
-
-                setItems(updatedItems);
-                setShowDeleteModal(false);
-                setIdToDelete(null);
-                triggerSuccess(response.msg || "Component deleted");
-            }
-        })
-        .catch(err => console.error("Error deleting component:", err));
-    };
+    // --- ACTIONS ---
 
     const handleOpenAdd = () => {
         setIsEditing(false);
         setActiveTab("basic");
+        setSelectedFile(null);
         setFormData({ name: "", description: "", codeSnippet: "", videoUrl: "", tags: "" });
         setShowModal(true);
     };
@@ -79,9 +61,10 @@ const App = () => {
     const handleOpenEdit = (component) => {
         setIsEditing(true);
         setActiveTab("basic");
+        setSelectedFile(null);
         setCurrentId(component._id || component.id);
-        setFormData({ 
-            name: component.name, 
+        setFormData({
+            name: component.name,
             description: component.description,
             codeSnippet: component.codeSnippet || "",
             videoUrl: component.videoUrl || "",
@@ -93,21 +76,27 @@ const App = () => {
     const handleSave = (e) => {
         e.preventDefault();
         const categoryId = items[selectedCategory]._id;
+
+        // Using FormData for Multipart Support (Backend must use @ModelAttribute)
+        const data = new FormData();
+        data.append("name", formData.name);
+        data.append("description", formData.description);
+        data.append("codeSnippet", formData.codeSnippet);
+        data.append("videoUrl", formData.videoUrl);
+        data.append("tags", formData.tags);
         
-        const payload = { 
-            ...formData, 
-            tags: formData.tags.split(",").map(t => t.trim()).filter(t => t !== "") 
-        };
+        if (selectedFile) {
+            data.append("gifFile", selectedFile);
+        }
 
         const method = isEditing ? 'PUT' : 'POST';
-        const url = isEditing 
+        const url = isEditing
             ? `${API_BASE}/${categoryId}/component/${currentId}`
             : `${API_BASE}/${categoryId}/component`;
 
         fetch(url, {
             method: method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: data // Content-Type header is handled automatically by the browser
         })
         .then(res => res.json())
         .then(response => {
@@ -124,24 +113,48 @@ const App = () => {
                 });
                 setItems(updatedItems);
                 setShowModal(false);
-                triggerSuccess(response.msg);
+                triggerSuccess(response.msg || "Component saved!");
             }
-        });
+        })
+        .catch(err => console.error("Save Error:", err));
     };
 
-    if (loading) return <div className="vh-100 d-flex justify-content-center align-items-center text-muted">Loading System...</div>;
+    const executeDelete = () => {
+        if (!idToDelete || selectedCategory === null || !items[selectedCategory]) return;
+        
+        const categoryId = items[selectedCategory]._id;
+
+        fetch(`${API_BASE}/${categoryId}/component/${idToDelete}`, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(response => {
+                if (response.status) {
+                    const updatedItems = items.map((item, index) => {
+                        if (index === selectedCategory) {
+                            return {
+                                ...item,
+                                component: item.component.filter(c => (c._id !== idToDelete && c.id !== idToDelete))
+                            };
+                        }
+                        return item;
+                    });
+                    setItems(updatedItems);
+                    setShowDeleteModal(false);
+                    setIdToDelete(null);
+                    triggerSuccess(response.msg || "Component removed");
+                }
+            })
+            .catch(err => console.error("Delete error:", err));
+    };
+
+    // --- RENDER HELPERS ---
+
+    if (loading) return <div className="vh-100 d-flex justify-content-center align-items-center text-muted">Page is Loading ...</div>;
+    
     const activeCategory = items[selectedCategory];
 
     return (
         <div className="d-flex vh-100 overflow-hidden bg-white">
-            {successMessage && (
-                <div className="position-fixed top-0 start-50 translate-middle-x mt-3" style={{ zIndex: 2000 }}>
-                    <div className="alert alert-success shadow border-0 px-4 py-2 fw-bold d-flex align-items-center gap-2">
-                        <i className="bi bi-check-circle-fill"></i> {successMessage}
-                    </div>
-                </div>
-            )}
-
+            {/* Sidebar */}
             <aside className="border-end bg-light d-flex flex-column" style={{ width: '280px' }}>
                 <div className="p-4 border-bottom bg-white d-flex align-items-center gap-2">
                     <i className="bi bi-terminal-box text-primary fs-4"></i>
@@ -157,9 +170,10 @@ const App = () => {
                 </div>
             </aside>
 
+            {/* Main Content */}
             <div className="flex-grow-1 d-flex flex-column overflow-hidden">
                 <header className="px-4 py-3 border-bottom bg-white d-flex justify-content-between align-items-center">
-                    <h3 className="fw-bold m-0">{activeCategory?.name}</h3>
+                    <h3 className="fw-bold m-0">{activeCategory?.name || "Select Category"}</h3>
                     <button className="btn btn-primary px-4 fw-bold rounded-pill" onClick={handleOpenAdd}>
                         <i className="bi bi-plus-circle me-1"></i> New Component
                     </button>
@@ -178,9 +192,6 @@ const App = () => {
                                                 <button className="btn btn-sm btn-light text-danger" onClick={() => {setIdToDelete(child._id || child.id); setShowDeleteModal(true)}}><i className="bi bi-trash"></i></button>
                                             </div>
                                         </div>
-                                        <div className="mb-2">
-                                            {child.tags?.map(t => <span key={t} className="badge bg-primary-subtle text-primary border me-1 small">{t}</span>)}
-                                        </div>
                                         <p className="text-muted small">{child.description}</p>
                                     </div>
                                 </div>
@@ -190,9 +201,16 @@ const App = () => {
                 </main>
             </div>
 
-            {/* MODAL SECTION (Kept original logic but ensured it's functional) */}
+            {/* Success Toast */}
+            {successMessage && (
+                <div className="position-fixed bottom-0 end-0 m-4 p-3 bg-dark text-white rounded-3 shadow-lg" style={{ zIndex: 3000 }}>
+                    <i className="bi bi-check-circle-fill text-success me-2"></i> {successMessage}
+                </div>
+            )}
+
+            {/* ADD/EDIT MODAL */}
             {showModal && (
-                <div className="modal show d-block" style={{ background: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(4px)' }}>
+                <div className="modal show d-block" style={{ background: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(4px)', zIndex: 1050 }}>
                     <div className="modal-dialog modal-lg modal-dialog-centered">
                         <div className="modal-content border-0 shadow-lg">
                             <div className="modal-header px-4 pt-4 border-0">
@@ -212,38 +230,56 @@ const App = () => {
                             </ul>
 
                             <form onSubmit={handleSave}>
-                                <div className="modal-body px-4 py-4" style={{ minHeight: '300px' }}>
+                                <div className="modal-body px-4 py-4" style={{ minHeight: '350px' }}>
                                     {activeTab === "basic" && (
                                         <>
                                             <div className="mb-3">
                                                 <label className="form-label small fw-bold">COMPONENT NAME</label>
-                                                <input type="text" className="form-control p-2" value={formData.name} required
-                                                    onChange={(e) => setFormData({...formData, name: e.target.value})} />
+                                                <input type="text" className="form-control p-2" required value={formData.name}  onChange={(e) => setFormData({...formData, name: e.target.value})} />
                                             </div>
                                             <div className="mb-3">
                                                 <label className="form-label small fw-bold">DESCRIPTION</label>
-                                                <textarea className="form-control p-2" rows="3" value={formData.description} required
-                                                    onChange={(e) => setFormData({...formData, description: e.target.value})}></textarea>
+                                                <textarea className="form-control p-2" rows="3" value={formData.description}  onChange={(e) => setFormData({...formData, description: e.target.value})}></textarea>
                                             </div>
                                             <div className="mb-3">
                                                 <label className="form-label small fw-bold">TAGS (Comma separated)</label>
-                                                <input type="text" className="form-control p-2" placeholder="e.g. Java, Security" value={formData.tags}
-                                                    onChange={(e) => setFormData({...formData, tags: e.target.value})} />
+                                                <input type="text" className="form-control p-2" placeholder="e.g. Java, Security" value={formData.tags} onChange={(e) => setFormData({...formData, tags: e.target.value})} />
                                             </div>
                                         </>
                                     )}
+
                                     {activeTab === "code" && (
                                         <div className="mb-3">
-                                            <textarea className="form-control font-monospace p-3 bg-dark text-white" rows="10" 
-                                                value={formData.codeSnippet}
-                                                onChange={(e) => setFormData({...formData, codeSnippet: e.target.value})}></textarea>
+                                            <textarea className="form-control font-monospace p-3 bg-dark text-white" rows="10" placeholder="Paste your code here..." value={formData.codeSnippet} onChange={(e) => setFormData({...formData, codeSnippet: e.target.value})}></textarea>
                                         </div>
                                     )}
+
                                     {activeTab === "media" && (
-                                        <div className="mb-4">
-                                            <label className="form-label small fw-bold">VIDEO TUTORIAL URL</label>
-                                            <input type="url" className="form-control" value={formData.videoUrl}
-                                                onChange={(e) => setFormData({...formData, videoUrl: e.target.value})} />
+                                        <div className="d-flex flex-column gap-4">
+                                            <div className="p-4 border rounded-3 bg-light text-center">
+                                                <label className="form-label d-block small fw-bold mb-3 text-start">COMPONENT PREVIEW (GIF/IMAGE)</label>
+                                                <input type="file" ref={fileInputRef} accept="image/*" className="d-none" onChange={(e) => setSelectedFile(e.target.files[0])} />
+                                                <div className="mb-2">
+                                                    {selectedFile ? (
+                                                        <div className="d-flex align-items-center justify-content-center gap-2">
+                                                            <i className="bi bi-file-earmark-image fs-3 text-primary"></i>
+                                                            <span className="fw-semibold">{selectedFile.name}</span>
+                                                            <button type="button" className="btn btn-sm btn-outline-danger border-0" onClick={() => setSelectedFile(null)}><i className="bi bi-x-lg"></i></button>
+                                                        </div>
+                                                    ) : (
+                                                        <button type="button" className="btn btn-outline-primary px-4 py-2" onClick={() => fileInputRef.current.click()}>
+                                                            <i className="bi bi-cloud-upload me-2"></i> Upload File
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="form-label small fw-bold">VIDEO TUTORIAL URL</label>
+                                                <div className="input-group">
+                                                    <span className="input-group-text bg-white"><i className="bi bi-link-45deg"></i></span>
+                                                    <input type="url" className="form-control" placeholder="https://..." value={formData.videoUrl} onChange={(e) => setFormData({...formData, videoUrl: e.target.value})} />
+                                                </div>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -256,17 +292,20 @@ const App = () => {
                     </div>
                 </div>
             )}
-            
-            {/* DELETE MODAL (Fixed Button) */}
+
+            {/* DELETE CONFIRMATION MODAL */}
             {showDeleteModal && (
-                <div className="modal show d-block" style={{ background: 'rgba(15, 23, 42, 0.8)', zIndex: 2050 }}>
-                    <div className="modal-dialog modal-sm modal-dialog-centered">
-                        <div className="modal-content text-center p-4">
-                            <h5 className="fw-bold">Delete this?</h5>
-                            <div className="d-flex gap-2 mt-3">
-                                {/* FIXED: Now calling executeDelete */}
-                                <button className="btn btn-danger w-100" onClick={executeDelete}>Delete</button>
-                                <button className="btn btn-light w-100" onClick={() => setShowDeleteModal(false)}>Cancel</button>
+                <div className="modal show d-block" style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)', zIndex: 2000, backdropFilter: 'blur(2px)' }}>
+                    <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '380px' }}>
+                        <div className="modal-content border-0 shadow-lg">
+                            <div className="modal-body text-center p-4">
+                                <div className="mb-3 text-danger"><i className="bi bi-exclamation-circle fs-1"></i></div>
+                                <h5 className="fw-bold">Remove Component?</h5>
+                                <p className="text-muted small">Are you sure you want to delete this? This action cannot be undone.</p>
+                                <div className="d-flex gap-2 mt-4">
+                                    <button className="btn btn-light w-100" onClick={() => setShowDeleteModal(false)}>Cancel</button>
+                                    <button className="btn btn-danger w-100" onClick={executeDelete}>Delete</button>
+                                </div>
                             </div>
                         </div>
                     </div>
