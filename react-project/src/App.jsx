@@ -255,33 +255,92 @@ const App = () => {
                                     )}
 
                                     {activeTab === "media" && (
-                                        <div className="d-flex flex-column gap-4">
-                                            <div className="p-4 border rounded-3 bg-light text-center">
-                                                <label className="form-label d-block small fw-bold mb-3 text-start">COMPONENT PREVIEW (GIF/IMAGE)</label>
-                                                <input type="file" ref={fileInputRef} accept="image/*" className="d-none" onChange={(e) => setSelectedFile(e.target.files[0])} />
-                                                <div className="mb-2">
-                                                    {selectedFile ? (
-                                                        <div className="d-flex align-items-center justify-content-center gap-2">
-                                                            <i className="bi bi-file-earmark-image fs-3 text-primary"></i>
-                                                            <span className="fw-semibold">{selectedFile.name}</span>
-                                                            <button type="button" className="btn btn-sm btn-outline-danger border-0" onClick={() => setSelectedFile(null)}><i className="bi bi-x-lg"></i></button>
-                                                        </div>
-                                                    ) : (
-                                                        <button type="button" className="btn btn-outline-primary px-4 py-2" onClick={() => fileInputRef.current.click()}>
-                                                            <i className="bi bi-cloud-upload me-2"></i> Upload File
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <label className="form-label small fw-bold">VIDEO TUTORIAL URL</label>
-                                                <div className="input-group">
-                                                    <span className="input-group-text bg-white"><i className="bi bi-link-45deg"></i></span>
-                                                    <input type="url" className="form-control" placeholder="https://..." value={formData.videoUrl} onChange={(e) => setFormData({...formData, videoUrl: e.target.value})} />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
+    <div className="space-y-4">
+        {/* RESOURCE SECTION: PRIMARY VISUAL ASSET */}
+        <section className="border rounded-3 p-4 bg-white shadow-sm mb-4">
+            <h6 className="fw-bold text-dark mb-3 border-bottom pb-2">
+                <i className="bi bi-cpu-fill me-2 text-primary"></i>Primary Asset Management
+            </h6>
+            
+            <div className="row align-items-start">
+                <div className="col-md-5">
+                    <div className={`dropzone-area border-2 rounded-3 p-4 text-center ${selectedFile ? 'border-success bg-success-subtle' : 'border-dashed bg-light'}`}
+                         style={{ borderStyle: 'dashed', minHeight: '180px', cursor: 'pointer' }}
+                         onClick={() => fileInputRef.current.click()}>
+                        
+                        <input type="file" ref={fileInputRef} className="d-none" accept="image/gif,image/png,image/jpeg"
+                               onChange={(e) => setSelectedFile(e.target.files[0])} />
+                        
+                        {!selectedFile ? (
+                            <div className="text-muted">
+                                <i className="bi bi-cloud-upload fs-1 mb-2"></i>
+                                <p className="small fw-bold mb-0">Drag & Drop or Click to Upload</p>
+                                <span className="x-small">GIF, PNG (Max 5MB)</span>
+                            </div>
+                        ) : (
+                            <div className="preview-container position-relative">
+                                <img src={URL.createObjectURL(selectedFile)} alt="Preview" 
+                                     className="img-fluid rounded shadow-sm" style={{ maxHeight: '120px' }} />
+                                <div className="mt-2 small text-truncate fw-bold">{selectedFile.name}</div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="col-md-7">
+                    <div className="mb-3">
+                        <label className="form-label x-small fw-bold text-muted">ASSET ACCESSIBILITY (ALT TEXT)</label>
+                        <input type="text" className="form-control form-control-sm" 
+                               placeholder="High-level description for accessibility compliance..."
+                               value={formData.altText} onChange={(e) => setFormData({...formData, altText: e.target.value})} />
+                    </div>
+                    <div className="p-2 bg-light rounded small border">
+                        <div className="d-flex justify-content-between mb-1">
+                            <span>Status:</span>
+                            <span className={selectedFile ? "text-success fw-bold" : "text-muted"}>
+                                {selectedFile ? "Ready for Sync" : "Pending"}
+                            </span>
+                        </div>
+                        <div className="d-flex justify-content-between">
+                            <span>MIME Type:</span>
+                            <span className="text-secondary">{selectedFile?.type || "N/A"}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        {/* EXTERNAL ECOSYSTEM SECTION */}
+        <section className="border rounded-3 p-4 bg-white shadow-sm">
+            <h6 className="fw-bold text-dark mb-3 border-bottom pb-2">
+                <i className="bi bi-link-45deg me-2 text-primary"></i>External References & Observability
+            </h6>
+            <div className="row g-3">
+                <div className="col-md-6">
+                    <label className="form-label x-small fw-bold text-muted">VIDEO DEMONSTRATION (URL)</label>
+                    <div className="input-group input-group-sm">
+                        <span className="input-group-text bg-white"><i className="bi bi-youtube"></i></span>
+                        <input type="url" className="form-control" placeholder="https://loom.com/..." 
+                               value={formData.videoUrl} onChange={(e) => setFormData({...formData, videoUrl: e.target.value})} />
+                    </div>
+                </div>
+                <div className="col-md-6">
+                    <label className="form-label x-small fw-bold text-muted">PRODUCTION LIVE DEMO</label>
+                    <div className="input-group input-group-sm">
+                        <span className="input-group-text bg-white"><i className="bi bi-globe"></i></span>
+                        <input type="url" className="form-control" placeholder="https://demo.patternhub.com/..." 
+                               value={formData.demoUrl} onChange={(e) => setFormData({...formData, demoUrl: e.target.value})} />
+                    </div>
+                </div>
+                <div className="col-12">
+                    <label className="form-label x-small fw-bold text-muted">TECHNICAL DOCUMENTATION (WIKI/GITHUB)</label>
+                    <input type="url" className="form-control form-control-sm" placeholder="Internal documentation link..." 
+                           value={formData.docsUrl} onChange={(e) => setFormData({...formData, docsUrl: e.target.value})} />
+                </div>
+            </div>
+        </section>
+    </div>
+)}
                                 </div>
                                 <div className="modal-footer border-0 px-4 pb-4">
                                     <button type="button" className="btn btn-light" onClick={() => setShowModal(false)}>Cancel</button>
